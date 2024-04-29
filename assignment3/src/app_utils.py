@@ -99,16 +99,30 @@ def generate_response(prompt, model, system_prompt="", temperature=0, second_try
     try:
         if model.startswith("Google: "):
             model_name = model[8:]
-            response = "Not implemented yet."
-            ####### YOUR CODE HERE ########
+            response = genai.generate_text(
+                model=model_name,
+                prompt=prompt,
+                temperature=TEMPERATURE,
+                max_output_tokens=MAX_TOKENS
+            )
         elif model.startswith("OpenAI: "):
             model_name = model[8:]
-            response = "Not implemented yet."
-            ####### YOUR CODE HERE ########
+            # There are multiple options for text generation with openAI, I'm using Creation.create because it
+            # is recommended for prompts, rather than simple chat.
+            response = openai.Completion.create(
+                engine=model_name,
+                prompt=prompt,
+                temperature=TEMPERATURE,
+                max_tokens=MAX_TOKENS
+            ).choices[0].text
         elif model.startswith("Anthropic: "):
             model_name = model[11:]
-            response = "Not implemented yet."
-            ####### YOUR CODE HERE ########
+            response = Anthropic.completions.create(
+                model=model_name,
+                max_tokens_to_sample=MAX_TOKENS,
+                temperature=TEMPERATURE,
+                prompt=prompt
+            )
         else:
             response = "Not implemented yet."
         ###### FEEL FREE TO USE OTHER LLMs #########
@@ -128,11 +142,28 @@ def create_knowledge_base(docs):
         
     print(f"Splitting {len(docs_orig)} documents")
 
-    ###### ADD YOUR CODE HERE ######
-    ###### ADD YOUR CODE HERE ######
-    ###### ADD YOUR CODE HERE ######
-    ###### ADD YOUR CODE HERE ######
-        
+    # If I were to overhaul the whole app, I might allow 'chunk_size' and 'overlap' to be adjustable hyperparameters.
+    # But, since I want to minimize how much I'm altering the given code, and I cannot alter any of the other files
+    # I will assign those variables arbitrarily here and include write my code as if these were hyperparameters.
+    chunk_size = 1000
+    overlap = 200
+
+    # I initialize my splitter and chunked docs object. I chose to use RecursiveCharacterTextSpliter because it is the
+    # standard text splitter in langchain that splits text and allows for overlap
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, overlap=overlap)
+
+    # Since later code implies that the original 'docs' is to have been overwritten with the chunked data, my chunking
+    # code will read from docs_orig, meanwhile 'docs' is cleared to be replaced with the chunked docs data.
+    docs = []
+
+    # I split each document into chunks and append to the chunked documents list
+    for doc in docs_orig:
+        # Split document into chunks
+        chunks_list = splitter.split(doc.page_content)
+        # Append these chunked docs to full chunked docs object (I save the metadata too since we call it later).
+        for chunk in chunks_list:
+            docs.append(Document(page_content=chunk, metadata=doc.metadata))
+
     print(f"Created {len(docs)} documents")
 
     texts = [doc.page_content for doc in docs]
@@ -149,14 +180,32 @@ def create_knowledge_base(docs):
     print(f"FAISS VectorDB has {db.index.ntotal} documents")
     
 
-def generate_kb_response(prompt, model, retriever, system_prompt="",template=None, temperature=0):
+def generate_kb_response(prompt, model, retriever, system_prompt="", template=None, temperature=0):
+
+
+    # **Extract additional context from surrounding documents**
 
     relevant_docs = retriever.get_relevant_documents(prompt)
+    relevant_doc_indices = [doc.metadata["index"] for doc in relevant_docs]
+    # Define an arbitrary context window
+    context_window = 3
+
+    # I identify the indices of the relevant doc chunks)
+    start_idx = max(0, min(relevant_doc_indices) - context_window)
+    end_idx = min(len(retriever.vectorstore.docs), max(relevant_doc_indices + context_window + 1))
+
+    relevant_docs_with_context = []
+    # get these chunks
+    for idx in range(start_idx, end_idx):
+        relevant_docs_with_context.append(retriever.vectorstore.docs[idx].page_content)
 
     # string together the relevant documents
+    # I have updated this to include the additional context
     relevant_docs_str = ""
-    for doc in relevant_docs:
+    for doc in relevant_docs_with_context:
         relevant_docs_str += doc.page_content + "\n\n"
+
+
 
     print(f"Prompt: {prompt}")
     print(f"Context: {relevant_docs_str}")

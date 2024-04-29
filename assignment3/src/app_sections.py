@@ -33,7 +33,7 @@ def run_chatbot():
     if start_button:
         st.session_state["messages"] = []
         # read and load 10k pdf file
-        loader = UnstructuredPDFLoader(os.path.join("../data/raw/",st.session_state["uploaded_file"]))
+        loader = UnstructuredPDFLoader(os.path.join("../data/raw/", st.session_state["uploaded_file"]))
         docs = loader.load()
 
         # process time series data to save to knowledge base
